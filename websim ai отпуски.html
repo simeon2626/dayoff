@@ -1,0 +1,294 @@
+<html><head><base href="https://лесен-отпуск.бг" />
+<meta charset="UTF-8">
+<title>Система за управление на отпуски - ЛесенОтпуск.бг</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+  }
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  }
+  h1, h2 {
+    color: #333;
+  }
+  form {
+    margin-bottom: 20px;
+  }
+  input, select {
+    margin: 5px 0;
+    padding: 5px;
+  }
+  button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #45a049;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
+  .calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    margin-top: 20px;
+  }
+  .calendar-header {
+    font-weight: bold;
+    text-align: center;
+    padding: 5px;
+    background-color: #f2f2f2;
+  }
+  .calendar-day {
+    border: 1px solid #ddd;
+    padding: 5px;
+    text-align: center;
+    min-height: 80px;
+  }
+  .calendar-day.has-vacation {
+    background-color: #ffe0e0;
+  }
+  .calendar-day .date {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  .calendar-day .employees {
+    font-size: 0.8em;
+  }
+  .weekend {
+    background-color: #f0f0f0;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>ЛесенОтпуск.бг - Система за управление на отпуски</h1>
+    
+    <h2>Регистрация на служител</h2>
+    <form id="employeeForm">
+      <input type="text" id="name" placeholder="Име на служителя" required>
+      <input type="number" id="vacationDays2023" placeholder="Оставащи дни за 2023" required>
+      <input type="number" id="vacationDays2024" placeholder="Оставащи дни за 2024" required>
+      <button type="submit">Регистрирай служител</button>
+    </form>
+
+    <h2>Регистриране на отпуск</h2>
+    <form id="vacationForm">
+      <select id="employee" required>
+        <option value="">Изберете служител</option>
+      </select>
+      <input type="date" id="startDate" required>
+      <input type="date" id="endDate" required>
+      <button type="submit">Регистрирай отпуск</button>
+    </form>
+
+    <h2>Справка за отпуските</h2>
+    <input type="month" id="monthPicker">
+    <button onclick="generateReport()">Генерирай справка</button>
+    <div id="report"></div>
+
+    <h2>Календар на отпуските</h2>
+    <input type="month" id="calendarMonth" value="2024-07">
+    <button onclick="updateCalendar()">Покажи календар</button>
+    <div id="calendar" class="calendar"></div>
+  </div>
+
+  <script>
+    let employees = [];
+    let vacations = [];
+
+    document.getElementById('employeeForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      let name = document.getElementById('name').value;
+      let days2023 = parseInt(document.getElementById('vacationDays2023').value);
+      let days2024 = parseInt(document.getElementById('vacationDays2024').value);
+      
+      employees.push({
+        name: name,
+        vacationDays: {2023: days2023, 2024: days2024},
+        usedDays: 0
+      });
+
+      updateEmployeeSelect();
+      this.reset();
+    });
+
+    document.getElementById('vacationForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      let employeeName = document.getElementById('employee').value;
+      let startDate = new Date(document.getElementById('startDate').value);
+      let endDate = new Date(document.getElementById('endDate').value);
+      
+      let employee = employees.find(emp => emp.name === employeeName);
+      if (employee) {
+        let days = countWorkdays(startDate, endDate);
+        
+        if (employee.vacationDays[2024] >= days) {
+          employee.vacationDays[2024] -= days;
+        } else {
+          let remainingDays = days - employee.vacationDays[2024];
+          employee.vacationDays[2024] = 0;
+          employee.vacationDays[2023] -= remainingDays;
+        }
+        
+        employee.usedDays += days;
+        
+        vacations.push({
+          employee: employeeName,
+          startDate: startDate,
+          endDate: endDate
+        });
+
+        updateCalendar();
+      }
+      
+      this.reset();
+    });
+
+    function updateEmployeeSelect() {
+      let select = document.getElementById('employee');
+      select.innerHTML = '<option value="">Изберете служител</option>';
+      employees.forEach(emp => {
+        let option = document.createElement('option');
+        option.value = emp.name;
+        option.textContent = emp.name;
+        select.appendChild(option);
+      });
+    }
+
+    function countWorkdays(start, end) {
+      let count = 0;
+      let curDate = new Date(start);
+      curDate.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      while (curDate <= end) {
+        let dayOfWeek = curDate.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+        curDate.setDate(curDate.getDate() + 1);
+      }
+      return count;
+    }
+
+    function generateReport() {
+      let month = document.getElementById('monthPicker').value;
+      let [year, monthNumber] = month.split('-');
+      year = parseInt(year);
+      monthNumber = parseInt(monthNumber);
+      
+      let report = '<table><tr><th>Служител</th><th>Използвани дни</th><th>Оставащи дни 2023</th><th>Оставащи дни 2024</th><th>Дни в отпуск този месец</th></tr>';
+      
+      employees.forEach(emp => {
+        let daysThisMonth = vacations.reduce((sum, v) => {
+          if (v.employee === emp.name) {
+            let start = new Date(Math.max(v.startDate, new Date(year, monthNumber - 1, 1)));
+            let end = new Date(Math.min(v.endDate, new Date(year, monthNumber, 0)));
+            return sum + countWorkdays(start, end);
+          }
+          return sum;
+        }, 0);
+        
+        report += `<tr>
+          <td>${emp.name}</td>
+          <td>${emp.usedDays}</td>
+          <td>${emp.vacationDays[2023]}</td>
+          <td>${emp.vacationDays[2024]}</td>
+          <td>${daysThisMonth}</td>
+        </tr>`;
+      });
+      
+      report += '</table>';
+      document.getElementById('report').innerHTML = report;
+    }
+
+    function updateCalendar() {
+      let calendarEl = document.getElementById('calendar');
+      calendarEl.innerHTML = '';
+      
+      let selectedMonth = document.getElementById('calendarMonth').value;
+      let [year, month] = selectedMonth.split('-');
+      year = parseInt(year);
+      month = parseInt(month) - 1;
+      
+      let firstDay = new Date(year, month, 1);
+      let lastDay = new Date(year, month + 1, 0);
+      
+      let dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+      dayNames.forEach(day => {
+        let dayHeader = document.createElement('div');
+        dayHeader.classList.add('calendar-header');
+        dayHeader.textContent = day;
+        calendarEl.appendChild(dayHeader);
+      });
+      
+      let startingDay = firstDay.getDay() || 7; // 1 (Monday) to 7 (Sunday)
+      for (let i = 1; i < startingDay; i++) {
+        calendarEl.appendChild(document.createElement('div'));
+      }
+      
+      for (let i = 1; i <= lastDay.getDate(); i++) {
+        let dayEl = document.createElement('div');
+        dayEl.classList.add('calendar-day');
+        
+        let date = new Date(year, month, i);
+        date.setHours(0, 0, 0, 0);
+        if (date.getDay() === 0 || date.getDay() === 6) {
+          dayEl.classList.add('weekend');
+        }
+        
+        let dateEl = document.createElement('div');
+        dateEl.classList.add('date');
+        dateEl.textContent = i;
+        dayEl.appendChild(dateEl);
+        
+        let employeesEl = document.createElement('div');
+        employeesEl.classList.add('employees');
+        dayEl.appendChild(employeesEl);
+        
+        let employeesOnVacation = vacations.filter(v => {
+          let vStart = new Date(v.startDate);
+          let vEnd = new Date(v.endDate);
+          vStart.setHours(0, 0, 0, 0);
+          vEnd.setHours(23, 59, 59, 999);
+          return date >= vStart && date <= vEnd;
+        }).map(v => v.employee);
+        
+        if (employeesOnVacation.length > 0) {
+          dayEl.classList.add('has-vacation');
+          employeesEl.textContent = employeesOnVacation.join(', ');
+        }
+        
+        calendarEl.appendChild(dayEl);
+      }
+    }
+
+    // Set min attribute for date inputs to today
+    let today = new Date().toISOString().split('T')[0];
+    document.getElementById('startDate').min = today;
+    document.getElementById('endDate').min = today;
+
+    updateCalendar();
+  </script>
+</body></html>
